@@ -1,0 +1,85 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: coalclay-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: coalclay
+      POSTGRES_PASSWORD: coalclay
+      POSTGRES_DB: coalclay
+    ports:
+      - '5432:5432'
+    volumes:
+      - coalclay_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U coalclay -d coalclay']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: coalclay-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://coalclay:coalclay@postgres:5432/coalclay?schema=public
+      JWT_SECRET: dev-secret-change-me
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:5173,http://localhost:5174,http://localhost:5175
+    ports:
+      - '4000:4000'
+
+  # Optional: the three React dashboards can also run in containers.
+  # By default the README has you run them with `npm run dev:*` on the host,
+  # which gives faster hot-reload — these services are here if you'd rather
+  # have `docker compose up` bring up literally everything.
+  frontend-customer:
+    build:
+      context: ./frontend/coal-and-clay-frontend
+      args:
+        VITE_APP_ROLE: customer
+    container_name: coalclay-frontend-customer
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - '5173:4173'
+    profiles: ['full']
+
+  frontend-kitchen:
+    build:
+      context: ./frontend/coal-and-clay-frontend
+      args:
+        VITE_APP_ROLE: kitchen
+    container_name: coalclay-frontend-kitchen
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - '5174:4173'
+    profiles: ['full']
+
+  frontend-owner:
+    build:
+      context: ./frontend/coal-and-clay-frontend
+      args:
+        VITE_APP_ROLE: owner
+    container_name: coalclay-frontend-owner
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4000
+    ports:
+      - '5175:4173'
+    profiles: ['full']
+
+volumes:
+  coalclay_pgdata:

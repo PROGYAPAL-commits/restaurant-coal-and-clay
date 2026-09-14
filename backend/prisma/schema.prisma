@@ -1,0 +1,147 @@
+// Coal & Clay — Prisma schema
+// Run `npx prisma migrate dev --name init` after setting DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Customers ----------
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders Order[]
+
+  @@map("users")
+}
+
+// ---------- Staff (kitchen / floor / management) ----------
+model Staff {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      String // Head Chef, Tandoor Chef, Sous Chef, Line Cook, Server, Cashier, Manager
+  shift     String // e.g. "12 PM – 10 PM"
+  onDuty    Boolean  @default(true)
+  ordersHandled Int  @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("staff")
+}
+
+// ---------- Dining tables ----------
+enum TableStatus {
+  available
+  occupied
+  reserved
+}
+
+model DiningTable {
+  id        Int         @id @default(autoincrement())
+  label     String      @unique // "T1", "T2", ...
+  seats     Int
+  status    TableStatus @default(available)
+  party     Int?
+  seatedAt  DateTime?
+  reservedFor DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  orders Order[]
+
+  @@map("tables")
+}
+
+// ---------- Ingredients (kitchen stock) ----------
+model Ingredient {
+  id        String   @id // slug, e.g. "paneer"
+  name      String
+  unit      String // kg, ltr, g, pcs
+  stock     Float    @default(0)
+  max       Float    @default(10) // full-stock capacity, used for restock + UI progress bars
+  threshold Float    @default(0) // low-stock warning level
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  menuLinks MenuItemIngredient[]
+
+  @@map("ingredients")
+}
+
+// ---------- Menu items ----------
+model MenuItem {
+  id        Int      @id @default(autoincrement())
+  name      String
+  desc      String?
+  category  String
+  price     Int
+  veg       Boolean  @default(true)
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ingredients MenuItemIngredient[]
+
+  @@map("menu_items")
+}
+
+// join table: which ingredients (and how much) a dish needs per order
+model MenuItemIngredient {
+  id           Int      @id @default(autoincrement())
+  menuItemId   Int
+  ingredientId String
+  qtyPerOrder  Float    @default(1) // amount of ingredient consumed per single dish order
+
+  menuItem   MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([menuItemId, ingredientId])
+  @@map("menu_item_ingredients")
+}
+
+// ---------- Orders ----------
+enum OrderStatus {
+  Received
+  Preparing
+  Plating
+  Served
+}
+
+enum OrderPriority {
+  standard
+  rush
+  vip
+}
+
+enum PaymentStatus {
+  Pending
+  Paid
+}
+
+model Order {
+  id            Int           @id @default(autoincrement())
+  customerId    Int?
+  tableId       Int?
+  items         Json // [{ menuItemId, name, price, qty }]
+  status        OrderStatus   @default(Received)
+  priority      OrderPriority @default(standard)
+  paymentStatus PaymentStatus @default(Pending)
+  total         Int
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  customer User?        @relation(fields: [customerId], references: [id])
+  table    DiningTable? @relation(fields: [tableId], references: [id])
+
+  @@map("orders")
+}
