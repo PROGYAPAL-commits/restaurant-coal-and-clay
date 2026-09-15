@@ -1,8 +1,8 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+RUN apt-get update -y && apt-get install -y openssl
 
 COPY package*.json ./
 RUN npm install
@@ -14,5 +14,4 @@ COPY . .
 
 EXPOSE 4000
 
-# Applies pending migrations, seeds the DB if empty, then starts the API.
 CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/seed.js && node src/index.js"]
